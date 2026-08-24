@@ -154,7 +154,16 @@ async function connectToWhatsApp() {
             // Resolve @lid se necessário
             let jidResolvido = remoteJid
             if (remoteJid.endsWith('@lid')) {
-                if (lidMap[remoteJid]) {
+                // 1) Em conversas privadas, o Baileys costuma entregar o número
+                //    de telefone real direto na própria mensagem (key.senderPn
+                //    ou key.remoteJidAlt), sem precisar de nenhuma consulta.
+                //    Isso é bem mais confiável que sock.onWhatsApp().
+                const pnDireto = msg.key.senderPn || msg.key.remoteJidAlt
+                if (pnDireto) {
+                    jidResolvido = pnDireto
+                    lidMap[remoteJid] = jidResolvido
+                    console.log(`🔄 LID resolvido (senderPn/remoteJidAlt): ${remoteJid} → ${jidResolvido}`)
+                } else if (lidMap[remoteJid]) {
                     jidResolvido = lidMap[remoteJid]
                     console.log(`🔄 LID resolvido (mapa): ${remoteJid} → ${jidResolvido}`)
                 } else {
