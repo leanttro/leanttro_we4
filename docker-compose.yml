@@ -1,0 +1,39 @@
+version: '3.8'
+
+# ═════════════════════════════════════════
+# APLICAÇÃO 1 — BAILEYS (WhatsApp)
+# Deploy separado no Dokploy. Sem domínio — este serviço não
+# precisa ser acessado de fora, só troca mensagens com a API.
+# ═════════════════════════════════════════
+
+services:
+  baileys:
+    build:
+      context: .
+      dockerfile: Dockerfile.baileys
+    container_name: estoque-wpp-baileys
+    environment:
+      # A API roda como Application no Dokploy (nome dela lá: "FRONT ESTOQUE").
+      # O hostname interno dela é o App Name que aparece embaixo do título
+      # na página da Application — hoje é agncia-start-front-estoque-fnifo8.
+      # Se você recriar/renomear essa Application, o hash muda e você
+      # precisa atualizar as duas linhas abaixo de novo.
+      API_BASE_URL: ${API_BASE_URL:-http://agncia-start-front-estoque-fnifo8:8000}
+      API_WEBHOOK_URL: ${API_WEBHOOK_URL:-http://agncia-start-front-estoque-fnifo8:8000/webhook/mensagem}
+      NODE_ENV: production
+    volumes:
+      - ./baileys/index.js:/app/index.js
+      - ./baileys/package.json:/app/package.json
+      - baileys_auth:/app/auth_info_estoque
+    networks:
+      - dokploy-network
+    command: node index.js
+    restart: always
+
+volumes:
+  baileys_auth:
+    driver: local
+
+networks:
+  dokploy-network:
+    external: true
