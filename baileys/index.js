@@ -151,46 +151,50 @@ async function connectToWhatsApp() {
                        || null
 
         if (!fromMe && text) {
-            // Resolve @lid se necessário
-            let jidResolvido = remoteJid
+            // Resolve @lid → número real, mas ATENÇÃO: isso é usado só para
+            // identificar/autorizar o número no banco. Para RESPONDER, sempre
+            // usamos o 'remoteJid' original (o @lid), porque é o endereço com
+            // o qual a sessão de criptografia (Signal) está de fato aberta no
+            // momento — responder num endereço diferente (ex: o telefone real)
+            // quebra a decodificação do lado do WhatsApp do cliente e a
+            // mensagem fica "Aguardando mensagem" pra sempre.
+            let numeroResolvido = null
             if (remoteJid.endsWith('@lid')) {
-                // 1) Em conversas privadas, o Baileys costuma entregar o número
-                //    de telefone real direto na própria mensagem (key.senderPn
-                //    ou key.remoteJidAlt), sem precisar de nenhuma consulta.
-                //    Isso é bem mais confiável que sock.onWhatsApp().
                 const pnDireto = msg.key.senderPn || msg.key.remoteJidAlt
                 if (pnDireto) {
-                    jidResolvido = pnDireto
-                    lidMap[remoteJid] = jidResolvido
-                    console.log(`🔄 LID resolvido (senderPn/remoteJidAlt): ${remoteJid} → ${jidResolvido}`)
+                    numeroResolvido = pnDireto
+                    lidMap[remoteJid] = numeroResolvido
+                    console.log(`🔄 LID identificado (senderPn/remoteJidAlt): ${remoteJid} → ${numeroResolvido}`)
                 } else if (lidMap[remoteJid]) {
-                    jidResolvido = lidMap[remoteJid]
-                    console.log(`🔄 LID resolvido (mapa): ${remoteJid} → ${jidResolvido}`)
+                    numeroResolvido = lidMap[remoteJid]
+                    console.log(`🔄 LID identificado (mapa): ${remoteJid} → ${numeroResolvido}`)
                 } else {
                     try {
                         const resultado = await sock.onWhatsApp(remoteJid)
                         if (resultado && resultado[0]?.jid) {
-                            jidResolvido = resultado[0].jid
-                            lidMap[remoteJid] = jidResolvido
-                            console.log(`🔄 LID resolvido (onWhatsApp): ${remoteJid} → ${jidResolvido}`)
+                            numeroResolvido = resultado[0].jid
+                            lidMap[remoteJid] = numeroResolvido
+                            console.log(`🔄 LID identificado (onWhatsApp): ${remoteJid} → ${numeroResolvido}`)
                         }
                     } catch (e) {
-                        console.log(`⚠️ Erro ao resolver LID: ${e.message}`)
+                        console.log(`⚠️ Erro ao identificar LID: ${e.message}`)
                     }
                 }
             }
 
-            io.emit('nova_mensagem', { remoteJid: jidResolvido, pushName, text, fromMe })
+            io.emit('nova_mensagem', { remoteJid, numeroResolvido, pushName, text, fromMe })
 
-            // Envia para API
+            // Envia para API — remoteJid é o endereço pra RESPONDER (não mexer),
+            // numeroResolvido é só pra checagem de autorização/cadastro
             try {
                 await axios.post(API_WEBHOOK_URL, {
-                    remoteJid: jidResolvido,
+                    remoteJid,
+                    numeroResolvido,
                     pushName,
                     text,
                     fromMe
                 }, { timeout: 10000 })
-                console.log(`📨 Webhook enviado | ${jidResolvido}`)
+                console.log(`📨 Webhook enviado | ${remoteJid}${numeroResolvido ? ' (número: ' + numeroResolvido + ')' : ''}`)
             } catch (e) {
                 console.error('Erro ao chamar webhook:', e.message)
             }
